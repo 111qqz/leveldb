@@ -17,6 +17,7 @@ namespace leveldb {
 
 Comparator::~Comparator() = default;
 
+// 使用了匿名namespace 
 namespace {
 class BytewiseComparatorImpl : public Comparator {
  public:
@@ -33,12 +34,14 @@ class BytewiseComparatorImpl : public Comparator {
     // Find length of common prefix
     size_t min_length = std::min(start->size(), limit.size());
     size_t diff_index = 0;
+    // diff_index是一个不同的index
     while ((diff_index < min_length) &&
            ((*start)[diff_index] == limit[diff_index])) {
       diff_index++;
     }
 
     if (diff_index >= min_length) {
+      // 没有不同的字符，说明一个串是另一个串的前缀，不需要做任何操作
       // Do not shorten if one string is a prefix of the other
     } else {
       uint8_t diff_byte = static_cast<uint8_t>((*start)[diff_index]);

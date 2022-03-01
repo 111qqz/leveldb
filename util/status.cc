@@ -20,6 +20,9 @@ const char* Status::CopyState(const char* state) {
 
 Status::Status(Code code, const Slice& msg, const Slice& msg2) {
   assert(code != kOk);
+  // 两种情况
+  // 1： msg2为空，len2为0, 返回的结果由msg决定
+  // 2： msg2不为空， size为 size(msg1) + len(": ") + size(msg2). 中间的2是分隔符
   const uint32_t len1 = static_cast<uint32_t>(msg.size());
   const uint32_t len2 = static_cast<uint32_t>(msg2.size());
   const uint32_t size = len1 + (len2 ? (2 + len2) : 0);

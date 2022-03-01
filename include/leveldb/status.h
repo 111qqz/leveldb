@@ -36,7 +36,8 @@ class LEVELDB_EXPORT Status {
   // Return a success status.
   static Status OK() { return Status(); }
 
-  // Return error status of an appropriate type.
+  // Return error status of an appropriate type
+  // 有两个slice是因为错误信息可能有两部分拼接而成
   static Status NotFound(const Slice& msg, const Slice& msg2 = Slice()) {
     return Status(kNotFound, msg, msg2);
   }
@@ -92,6 +93,7 @@ class LEVELDB_EXPORT Status {
   Status(Code code, const Slice& msg, const Slice& msg2);
   static const char* CopyState(const char* s);
 
+  // 这个而state_ 有点巧妙
   // OK status has a null state_.  Otherwise, state_ is a new[] array
   // of the following form:
   //    state_[0..3] == length of message
@@ -112,6 +114,7 @@ inline Status& Status::operator=(const Status& rhs) {
   }
   return *this;
 }
+// move assigmen operator 的经典实现
 inline Status& Status::operator=(Status&& rhs) noexcept {
   std::swap(state_, rhs.state_);
   return *this;
