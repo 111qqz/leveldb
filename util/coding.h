@@ -61,6 +61,7 @@ inline void EncodeFixed32(char* dst, uint32_t value) {
   buffer[3] = static_cast<uint8_t>(value >> 24);
 }
 
+// 将一个uint64_t 拆成8个char存储，存储到char dst[8]中
 inline void EncodeFixed64(char* dst, uint64_t value) {
   uint8_t* const buffer = reinterpret_cast<uint8_t*>(dst);
 

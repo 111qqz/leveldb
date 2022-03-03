@@ -15,12 +15,16 @@ namespace leveldb {
 static uint64_t PackSequenceAndType(uint64_t seq, ValueType t) {
   assert(seq <= kMaxSequenceNumber);
   assert(t <= kValueTypeForSeek);
+  // 高位是sequence number,低位是type
   return (seq << 8) | t;
 }
 
 void AppendInternalKey(std::string* result, const ParsedInternalKey& key) {
+  // 把user key这个slice 往result后拼接
   result->append(key.user_key.data(), key.user_key.size());
   PutFixed64(result, PackSequenceAndType(key.sequence, key.type));
+  // Result 中分了三部分
+  // user_key , sequence, type.  后两部分合成了一个uint64_t
 }
 
 std::string ParsedInternalKey::DebugString() const {
@@ -51,6 +55,8 @@ int InternalKeyComparator::Compare(const Slice& akey, const Slice& bkey) const {
   //    decreasing type (though sequence# should be enough to disambiguate)
   int r = user_comparator_->Compare(ExtractUserKey(akey), ExtractUserKey(bkey));
   if (r == 0) {
+
+    // 将两个slice末尾的8byte转为uint64_t，这个值包含了"sequence number+type两部分"
     const uint64_t anum = DecodeFixed64(akey.data() + akey.size() - 8);
     const uint64_t bnum = DecodeFixed64(bkey.data() + bkey.size() - 8);
     if (anum > bnum) {

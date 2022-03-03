@@ -12,6 +12,7 @@ void PutFixed32(std::string* dst, uint32_t value) {
   dst->append(buf, sizeof(buf));
 }
 
+// 将value转换为8个char，然后依次append到dst的末尾
 void PutFixed64(std::string* dst, uint64_t value) {
   char buf[sizeof(value)];
   EncodeFixed64(buf, value);
