@@ -52,6 +52,7 @@ struct LRUHandle {
   uint32_t refs;     // References, including cache reference, if present.
   uint32_t hash;     // Hash of key(); used for fast sharding and comparisons
   char key_data[1];  // Beginning of key
+		     // kk: why char[1]? 
 
   Slice key() const {
     // next is only equal to this if the LRU handle is the list head of an
@@ -79,7 +80,11 @@ class HandleTable {
   LRUHandle* Insert(LRUHandle* h) {
     LRUHandle** ptr = FindPointer(h->key(), h->hash);
     LRUHandle* old = *ptr;
+    // kk: two case here:
+    // 1. old is nullptr. we not find the exact element. 
+    // 2. old is not nullptr, we find the exact key. just update next_hash value of h.
     h->next_hash = (old == nullptr ? nullptr : old->next_hash);
+    // kk: assiment new elemnt h to the slot. might override old value
     *ptr = h;
     if (old == nullptr) {
       ++elems_;
@@ -95,7 +100,9 @@ class HandleTable {
   LRUHandle* Remove(const Slice& key, uint32_t hash) {
     LRUHandle** ptr = FindPointer(key, hash);
     LRUHandle* result = *ptr;
+    // kk : if result is nullptr, it meants no such key in table. Just do nothing.
     if (result != nullptr) {
+	// kk: link next node, so the linked list will not break
       *ptr = result->next_hash;
       --elems_;
     }
@@ -105,6 +112,8 @@ class HandleTable {
  private:
   // The table consists of an array of buckets where each bucket is
   // a linked list of cache entries that hash into the bucket.
+  // kk: length_ is the number of bucket
+  // kk:  "slot" here means different things with bucket
   uint32_t length_;
   uint32_t elems_;
   LRUHandle** list_;
@@ -113,29 +122,57 @@ class HandleTable {
   // matches key/hash.  If there is no such cache entry, return a
   // pointer to the trailing slot in the corresponding linked list.
   LRUHandle** FindPointer(const Slice& key, uint32_t hash) {
+	  // kk: length_ should be power of 2
+	  //
     LRUHandle** ptr = &list_[hash & (length_ - 1)];
+    // kk: ptr is the bucket position
+    // TODO(kk): different key might get same hash value.
+    // kk:
+    // four case here:
+    // 1: hash == ptr->hash , key == ptr->key. this is the exact element we find. return 
+    // 2: hash == ptr->hash , key != ptr->key. hash function collision happen! try next node
+    // 3: hash != ptr->hash , key != ptr->key. general case for different key. try next node.
+    // Note this is a possible case . for different hash can get the same hash & (length-1) value,
+    // so different hash Handles might be in the same bucket
+    // 4: hash != ptr->hash, key == ptr->key .   impossible!
+    // combine 1..3 case here. 
     while (*ptr != nullptr && ((*ptr)->hash != hash || key != (*ptr)->key())) {
       ptr = &(*ptr)->next_hash;
     }
+    //kk: return last node's next_hash pointe(aka nullptr) 
+    //or the  pointer of LRUHandle the exact element we find 
     return ptr;
   }
 
+  // kk: rehash operation 
+  // invoke this function in ctor 
   void Resize() {
     uint32_t new_length = 4;
+    // kk:binary lifting
+    // when there is ave 1 element in each linked list ,then do "binary lifting"
     while (new_length < elems_) {
       new_length *= 2;
     }
+
     LRUHandle** new_list = new LRUHandle*[new_length];
     memset(new_list, 0, sizeof(new_list[0]) * new_length);
+    // kk: count is the number of elements we have copyied
+    // copy all elems in list_ to new_list
     uint32_t count = 0;
     for (uint32_t i = 0; i < length_; i++) {
       LRUHandle* h = list_[i];
+      // processing each linked list
       while (h != nullptr) {
+	// kk: protect h->next_hash for next time processing
         LRUHandle* next = h->next_hash;
         uint32_t hash = h->hash;
+	// ptr is fixed value for same hash & new_length
         LRUHandle** ptr = &new_list[hash & (new_length - 1)];
+	//TODO(???): what happen here?
         h->next_hash = *ptr;
+	// kk: assigment element h to slot pointed by ptr.
         *ptr = h;
+	// kk : continue processing next node
         h = next;
         count++;
       }
