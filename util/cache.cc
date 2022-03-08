@@ -47,6 +47,7 @@ struct LRUHandle {
   LRUHandle* next;
   LRUHandle* prev;
   size_t charge;  // TODO(opt): Only allow uint32_t?
+		  // kk: different key occupy differnet space in cache,this is called "charge"
   size_t key_length;
   bool in_cache;     // Whether entry is in the cache.
   uint32_t refs;     // References, including cache reference, if present.
@@ -70,6 +71,7 @@ struct LRUHandle {
 // 4.4.3's builtin hashtable.
 class HandleTable {
  public:
+
   HandleTable() : length_(0), elems_(0), list_(nullptr) { Resize(); }
   ~HandleTable() { delete[] list_; }
 
@@ -77,6 +79,8 @@ class HandleTable {
     return *FindPointer(key, hash);
   }
 
+  // return nullptr if h is not found in table
+  // return non-nullptr if h is already in table
   LRUHandle* Insert(LRUHandle* h) {
     LRUHandle** ptr = FindPointer(h->key(), h->hash);
     LRUHandle* old = *ptr;
@@ -97,6 +101,8 @@ class HandleTable {
     return old;
   }
 
+  // kk: return nullptr if no such key
+  // otherwise just retunr the element just removed
   LRUHandle* Remove(const Slice& key, uint32_t hash) {
     LRUHandle** ptr = FindPointer(key, hash);
     LRUHandle* result = *ptr;
@@ -279,6 +285,8 @@ void LRUCache::LRU_Remove(LRUHandle* e) {
   e->prev->next = e->next;
 }
 
+// note: the linked list is a circle list
+// dummy node -> node1(oldest) -> node2 -> ... -> nodeN(newest) -> dummy node
 void LRUCache::LRU_Append(LRUHandle* list, LRUHandle* e) {
   // Make "e" newest entry by inserting just before *list
   e->next = list;
@@ -307,6 +315,7 @@ Cache::Handle* LRUCache::Insert(const Slice& key, uint32_t hash, void* value,
                                                 void* value)) {
   MutexLock l(&mutex_);
 
+  // kk : 1 means key_data,beginning of char,used as a placeholder
   LRUHandle* e =
       reinterpret_cast<LRUHandle*>(malloc(sizeof(LRUHandle) - 1 + key.size()));
   e->value = value;
@@ -323,15 +332,24 @@ Cache::Handle* LRUCache::Insert(const Slice& key, uint32_t hash, void* value,
     e->in_cache = true;
     LRU_Append(&in_use_, e);
     usage_ += charge;
+    // table_.Insert will return nullptr if no e in table_ before
+    // otherwise return a non-nullptr value.
+    // if nullptr, FinishErase just do nothing
+    // if not nullptr, undo above 4 lines
     FinishErase(table_.Insert(e));
   } else {  // don't cache. (capacity_==0 is supported and turns off caching.)
     // next is read by key() in an assert, so it must be initialized
     e->next = nullptr;
   }
+  // lru_.next == &lru_ means lru_ is the dummy node after last node in linked list
   while (usage_ > capacity_ && lru_.next != &lru_) {
+	// kk: why while instead of if? 
+	// LRU_Remove() in FinishErase function change lru_ value
+	// FIXME: is this oldest node? yes,lur_.next is oldest. 
     LRUHandle* old = lru_.next;
     assert(old->refs == 1);
     bool erased = FinishErase(table_.Remove(old->key(), old->hash));
+    // kk: old should always be in table_, so erased should be true.
     if (!erased) {  // to avoid unused variable when compiled NDEBUG
       assert(erased);
     }
@@ -360,6 +378,8 @@ void LRUCache::Erase(const Slice& key, uint32_t hash) {
 
 void LRUCache::Prune() {
   MutexLock l(&mutex_);
+  // kk: why use while here? only processing 1 time.
+  // lru_ is changed in the LRU_Remove function
   while (lru_.next != &lru_) {
     LRUHandle* e = lru_.next;
     assert(e->refs == 1);
