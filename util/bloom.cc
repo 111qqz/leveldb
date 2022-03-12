@@ -35,24 +35,33 @@ class BloomFilterPolicy : public FilterPolicy {
 
     size_t bytes = (bits + 7) / 8;
     bits = bytes * 8;
+    // bits是bitmap的长度
 
     const size_t init_size = dst->size();
     dst->resize(init_size + bytes, 0);
-    dst->push_back(static_cast<char>(k_));  // Remember # of probes in filter
+    dst->push_back(static_cast<char>(k_));  // Remember # of probes in filterj
+    // kk: use char array as bitmap
+    // each char has 8 position
     char* array = &(*dst)[init_size];
     for (int i = 0; i < n; i++) {
       // Use double-hashing to generate a sequence of hash values.
       // See analysis in [Kirsch,Mitzenmacher 2006].
       uint32_t h = BloomHash(keys[i]);
+      // kk: 这里每次+delta就相当于生成不同的hash值了
+      // delta是另一个hash value,通过翻转左右两边得到
       const uint32_t delta = (h >> 17) | (h << 15);  // Rotate right 17 bits
+						     // k 是hash函数的个数
       for (size_t j = 0; j < k_; j++) {
+	      // kk: 这里就是把char* 当成bitset 使用
         const uint32_t bitpos = h % bits;
         array[bitpos / 8] |= (1 << (bitpos % 8));
         h += delta;
       }
     }
   }
+  // 6:  ABCDEF->  0000AB | CDEF00 -> CDEFAB
 
+  // 返回key 是否啃呢个在bloom_filter中。 true表示(大概率)在，false表示一定不在
   bool KeyMayMatch(const Slice& key, const Slice& bloom_filter) const override {
     const size_t len = bloom_filter.size();
     if (len < 2) return false;
@@ -73,6 +82,7 @@ class BloomFilterPolicy : public FilterPolicy {
     const uint32_t delta = (h >> 17) | (h << 15);  // Rotate right 17 bits
     for (size_t j = 0; j < k; j++) {
       const uint32_t bitpos = h % bits;
+      // 如果其中一个位置为0就返回false
       if ((array[bitpos / 8] & (1 << (bitpos % 8))) == 0) return false;
       h += delta;
     }
