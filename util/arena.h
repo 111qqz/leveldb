@@ -39,10 +39,12 @@ class Arena {
   char* AllocateNewBlock(size_t block_bytes);
 
   // Allocation state
+  // alloc_ptr_ 表示下一个可用的位置
   char* alloc_ptr_;
   size_t alloc_bytes_remaining_;
 
   // Array of new[] allocated memory blocks
+  // 需要注意，vector中每一个元素都是一段内存块(memory, block)
   std::vector<char*> blocks_;
 
   // Total memory usage of the arena.
